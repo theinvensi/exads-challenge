@@ -1,34 +1,40 @@
-/**
- * Some predefined delay values (in milliseconds).
- */
-export enum Delays {
-  Short = 500,
-  Medium = 2000,
-  Long = 5000,
-}
+import * as http from 'http'
 
-/**
- * Returns a Promise<string> that resolves after a given time.
- *
- * @param {string} name - A name.
- * @param {number=} [delay=Delays.Medium] - A number of milliseconds to delay resolution of the Promise.
- * @returns {Promise<string>}
- */
-function delayedHello(
-  name: string,
-  delay: number = Delays.Medium,
-): Promise<string> {
-  return new Promise((resolve: (value?: string) => void) =>
-    setTimeout(() => resolve(`Hello, ${name}`), delay),
-  );
-}
+import { ExAdsCypher } from './exadsCypher.js'
+import { HttpServer, RouterType } from './server.js'
 
-// Please see the comment in the .eslintrc.json file about the suppressed rule!
-// Below is an example of how to use ESLint errors suppression. You can read more
-// at https://eslint.org/docs/latest/user-guide/configuring/rules#disabling-rules
+new class {
+  private _routes: RouterType = {
+    [`POST /`]: this.encodeEnglishMessages
+  }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export async function greeter(name: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  // The name parameter should be of type string. Any is used only to trigger the rule.
-  return await delayedHello(name, Delays.Long);
+  private encodeEnglishMessages(req: http.IncomingMessage, res: http.ServerResponse) {
+    req.setEncoding(`utf8`)
+
+    let rawMsg = ``
+
+    req.on(`data`, chunk => rawMsg += chunk)
+
+    req.on(`end`, () => {
+      if (rawMsg.length === 0) return HttpServer.respondeAs(res, 400, `MISSING_MSG`)
+
+      const cypher = new ExAdsCypher(rawMsg)
+
+      try {
+        const encodedMsg = cypher.encode()
+        HttpServer.respondeAs(res, 200, encodedMsg)
+      } catch (e) {
+        if (e instanceof Error) {
+          HttpServer.respondeAs(res, 400, e.message)
+        } else {
+          HttpServer.respondeAs(res, 400, `${e}`)
+        }
+      }
+
+    })
+  }
+
+  constructor() {
+    new HttpServer(this._routes)
+  }
 }
